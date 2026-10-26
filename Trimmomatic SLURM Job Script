@@ -1,0 +1,39 @@
+#!/bin/bash
+#SBATCH --job-name=trimmomatic_RNAseq
+#SBATCH --output=/scratch/alice/m/mk767/3_Trimmed_Data/trimmomatic_%j.out
+#SBATCH --error=/scratch/alice/m/mk767/3_Trimmed_Data/trimmomatic_%j.err
+#SBATCH --time=12:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+
+JAVA=/scratch/alice/[alphabetized usernames]/[username]/0_Extras/1_Apps/jdk-17.0.2/bin/java
+RAW_DIR=/scratch/alice/[alphabetized usernames]/[username]/1_Raw_Data/raw_fly_file/raw_data
+PAIRED_DIR=/scratch/alice/[alphabetized usernames]/[username]/3_Trimmed_Data/Paired
+UNPAIRED_DIR=/scratch/alice/[alphabetized usernames]/[username]/3_Trimmed_Data/Unpaired
+TRIMMOMATIC_JAR=/scratch/alice/[alphabetized usernames]/[username]/0_Extras/1_Apps/Trimmomatic-0.39/trimmomatic-0.39.jar
+ADAPTERS=/scratch/alice/[alphabetized usernames]/[username]/0_Extras/1_Apps/Trimmomatic-0.39/adapters/TruSeq3-PE.fa
+SAMPLES=/scratch/alice/[alphabetized usernames]/[username]/1_Raw_Data/samples.txt
+
+# Create output directories if they do not already exist
+mknockdownir -p $PAIRED_DIR
+mknockdownir -p $UNPAIRED_DIR
+
+while read sample; do
+    echo "Trimming sample ${sample}..."
+
+    $JAVA -jar $TRIMMOMATIC_JAR PE \
+        -threads 4 \
+        $RAW_DIR/${sample}_1.fq.gz $RAW_DIR/${sample}_2.fq.gz \
+        $PAIRED_DIR/${sample}_1_paired.fq.gz $UNPAIRED_DIR/${sample}_1_unpaired.fq.gz \
+        $PAIRED_DIR/${sample}_2_paired.fq.gz $UNPAIRED_DIR/${sample}_2_unpaired.fq.gz \
+        ILLUMINACLIP:$ADAPTERS:2:30:10 \
+        SLIDINGWINDOW:4:28 MINLEN:36 \
+        &> $PAIRED_DIR/${sample}_trimmomatic.log
+
+    echo "Finished trimming ${sample}"
+done < $SAMPLES
+EOF
+
+# Submit the job
+sbatch /scratch/alice/m/mk767/3_Trimmed_Data/trimmomatic.sh

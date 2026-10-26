@@ -1,0 +1,40 @@
+cat > /scratch/alice/[alphabetized usernames]/[username]/5_BAM_Data/sam_to_bam.sh << 'EOF'
+#!/bin/bash
+#SBATCH --job-name=sam_to_bam
+#SBATCH --output=/scratch/alice/[alphabetized usernames]/[username]/5_BAM_Data/sam_to_bam_%j.log
+#SBATCH --time=12:00:00
+#SBATCH --mem=32G
+#SBATCH --cpus-per-task=8
+
+module load samtools
+
+SAM_DIR=/scratch/alice/[alphabetized usernames]/[username]/4_SAM_Data
+BAM_DIR=/scratch/alice/[alphabetized usernames]/[username]/5_BAM_Data
+
+mknockdownir -p $BAM_DIR
+
+for SAM in ${SAM_DIR}/*.sam
+do
+    SAMPLE=$(basename ${SAM} .sam)
+    echo "Processing ${SAMPLE}..."
+
+    # Convert SAM to BAM and sort by coordinate
+    # -u: output uncompressed BAM to pipe (saves CPU)
+    # -@: number of threads
+    samtools view -@ 8 -u -S ${SAM} | \
+    samtools sort -@ 8 -o ${BAM_DIR}/${SAMPLE}_sorted.bam
+
+    # Index the sorted BAM file for rapid access
+    samtools index ${BAM_DIR}/${SAMPLE}_sorted.bam
+
+    echo "Finished ${SAMPLE}"
+done
+
+echo "All files converted."
+EOF
+
+sbatch /scratch/alice/[alphabetized usernames]/[username]/5_BAM_Data/sam_to_bam.sh
+
+# Output:
+# /scratch/alice/m/mk767/5_BAM_Data/s{N}_sorted.bam     — sorted BAM per sample
+# /scratch/alice/m/mk767/5_BAM_Data/s{N}_sorted.bam.bai — BAM index per sample

@@ -1,0 +1,29 @@
+# Load required modules (gcc must be loaded before fastqc)
+module load gcc/12.3.0-yxgv2bl
+module load fastqc/0.12.1-hkgpcde
+
+# Create output directory
+mkdir -p /scratch/alice/[alphabetized usernames]/[username]/2_FastQC/1_Pre_trimming/FastQC_pre_trim
+
+# Loop over all samples and run FastQC on each pair
+while read sample; do
+    echo "Running FastQC for ${sample}..."
+
+    fastqc -t 4 \
+        /scratch/alice/[alphabetized usernames]/[username]/1_Raw_Data/raw_fly_file/raw_data/${sample}_1.fq.gz \
+        /scratch/alice/[alphabetized usernames]/[username]/1_Raw_Data/raw_fly_file/raw_data/${sample}_2.fq.gz \
+        -o /scratch/alice/[alphabetized usernames]/[username]/2_FastQC/1_Pre_trimming/FastQC_pre_trim \
+        &> /scratch/alice/[alphabetized usernames]/[username]/2_FastQC/1_Pre_trimming/FastQC_pre_trim/${sample}_fastqc.log
+
+    echo "FastQC complete for ${sample}"
+done < /scratch/alice/[alphabetized usernames]/[username]/1_Raw_Data/samples.txt
+
+# Aggregate FastQC results with MultiQC
+module load py-multiqc/1.14-ateq76h
+multiqc /scratch/alice/[alphabetized usernames]/[username]/2_FastQC/1_Pre_trimming/FastQC_pre_trim/ \
+    -o /scratch/alice/[alphabetized usernames]/[username]/2_FastQC/1_Pre_trimming/ \
+    &> /scratch/alice/[alphabetized usernames]/[username]/2_FastQC/1_Pre_trimming/multiqc.log
+
+# Output:
+# /scratch/alice/[alphabetized usernames]/[username]/2_FastQC/1_Pre_trimming/multiqc_report.html
+# /scratch/alice/[alphabetized usernames]/[username]/2_FastQC/1_Pre_trimming/multiqc_data/

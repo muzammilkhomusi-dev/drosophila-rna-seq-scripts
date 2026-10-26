@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=trimmomatic_RNAseq
-#SBATCH --output=/scratch/alice/m/mk767/3_Trimmed_Data/trimmomatic_%j.out
-#SBATCH --error=/scratch/alice/m/mk767/3_Trimmed_Data/trimmomatic_%j.err
+#SBATCH --output=/scratch/alice/[alphabetized usernames]/[username]/3_Trimmed_Data/trimmomatic_%j.out
+#SBATCH --error=/scratch/alice/[alphabetized usernames]/[username]/3_Trimmed_Data/trimmomatic_%j.err
 #SBATCH --time=12:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4

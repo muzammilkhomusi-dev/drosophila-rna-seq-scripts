@@ -1,0 +1,18 @@
+# Directories were created manually in the scratch directory.
+
+# /scratch/alice/[alphabetized usernames]/[username]
+# ├── 0_Extras/           # Miscellaneous files, apps, and reference downloads
+# │   └── 1_Apps/         # Locally installed tools (Trimmomatic, Java, Subread, etc.)
+# ├── 1_Raw_Data/         # Original raw FASTQ files and sample list
+# │   └── raw_fly_file/
+# │       └── raw_data/   # s1_1.fq.gz, s1_2.fq.gz ... s18_1.fq.gz, s18_2.fq.gz
+# ├── 2_FastQC/           # All FastQC and MultiQC outputs
+# │   ├── 1_Pre_trimming/ # NOTE: to be completed
+# │   └── 2_Post_trimming/
+# ├── 3_Trimmed_Data/     # Trimmomatic outputs
+# │   ├── Paired/         # Paired trimmed reads (used for alignment)
+# │   └── Unpaired/       # Unpaired trimmed reads (discarded)
+# ├── 4_SAM_Data/         # HISAT2 alignment output (SAM files)
+# ├── 5_BAM_Data/         # Sorted BAM files
+# ├── 6_Counts_Data/      # featureCounts and DESeq2 output
+# └── 7_D.melanogaster_Index/  # HISAT2 genome index + reference genome files

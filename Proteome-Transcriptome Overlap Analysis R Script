@@ -1,0 +1,122 @@
+# --- Install required packages (run once) ---
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("org.Dm.eg.db")
+install.packages(c("dplyr", "readr", "writexl"))
+ 
+# --- Load libraries ---
+library(AnnotationDbi)
+library(org.Dm.eg.db)
+library(dplyr)
+library(readr)
+library(writexl)
+ 
+# --- Step 1: Set working directory to folder containing CSV files ---
+# Use Session > Set Working Directory > Choose Directory in RStudio
+# or run: setwd("//uol.le.ac.uk/root/staff/home/[alphabetized usernames]/[username]/My Documents/PhD/3_Experiments/RNA-seq")
+ 
+# --- Step 2: Build CG ID to gene symbol mapping ---
+# ALIAS keytype must be used (not FLYBASE) as CG IDs are aliases in org.Dm.eg.db
+mapping <- AnnotationDbi::select(org.Dm.eg.db,
+                  keys    = keys(org.Dm.eg.db, keytype = "ALIAS"),
+                  columns = c("ALIAS", "SYMBOL"),
+                  keytype = "ALIAS")
+mapping <- mapping[!is.na(mapping$SYMBOL), ]
+mapping <- mapping[!duplicated(mapping$ALIAS), ]
+cat("Mapping table built:", nrow(mapping), "entries\n")
+ 
+# --- Step 3: Load and clean data ---
+rnaseq_upreg   <- read_csv("rnaseq_upreg.csv", skip=1,
+                            col_names=c("KMO_upreg","TDO_upreg","common_upreg"))
+rnaseq_downreg <- read_csv("rnaseq_downreg.csv", skip=1,
+                            col_names=c("KMO_downreg","TDO_downreg","common_downreg"))
+ 
+# Remove residual header rows and empty columns
+rnaseq_upreg <- rnaseq_upreg %>%
+    filter(!KMO_upreg %in% c("KMO KD Upreg","KMO_upreg")) %>%
+    select(KMO_upreg, TDO_upreg, common_upreg)
+rnaseq_downreg <- rnaseq_downreg %>%
+    filter(!KMO_downreg %in% c("KMO KD Downreg","KMO_downreg"))
+ 
+proteomics_upreg   <- read_csv("proteomics_upreg.csv") %>% select(1:4)
+proteomics_downreg <- read_csv("proteomics_downreg.csv") %>% select(1:4)
+colnames(proteomics_upreg)   <- c("day1_male","day10_male","day1_female","day10_female")
+colnames(proteomics_downreg) <- c("day1_male","day10_male","day1_female","day10_female")
+ 
+# --- Step 4: Convert KMO KD RNA-seq CG IDs to gene symbols ---
+# Combine KMO-only and common columns to capture all KMO KD hits
+kmo_upreg_ids <- unique(na.omit(c(rnaseq_upreg$KMO_upreg,
+                                   rnaseq_upreg$common_upreg)))
+kmo_downreg_ids <- unique(na.omit(c(rnaseq_downreg$KMO_downreg,
+                                     rnaseq_downreg$common_downreg)))
+ 
+kmo_upreg_symbols <- mapping %>%
+    filter(ALIAS %in% kmo_upreg_ids) %>%
+    pull(SYMBOL) %>% unique() %>% na.omit()
+ 
+kmo_downreg_symbols <- mapping %>%
+    filter(ALIAS %in% kmo_downreg_ids) %>%
+    pull(SYMBOL) %>% unique() %>% na.omit()
+ 
+cat("KMO upreg   | CG IDs:", length(kmo_upreg_ids),
+    "| Mapped symbols:", length(kmo_upreg_symbols), "\n")
+cat("KMO downreg | CG IDs:", length(kmo_downreg_ids),
+    "| Mapped symbols:", length(kmo_downreg_symbols), "\n")
+ 
+# --- Step 5 (corrected): Use 1-day-old proteomics columns only ---
+# RNA-seq samples are from 1-day-old fly heads, so only day 1 proteomics
+# columns are comparable. Day 10 columns are excluded.
+
+proteomics_upreg_names   <- unique(na.omit(c(proteomics_upreg$day1_male,
+                                              proteomics_upreg$day1_female)))
+proteomics_downreg_names <- unique(na.omit(c(proteomics_downreg$day1_male,
+                                              proteomics_downreg$day1_female)))
+
+common_kmo_upreg   <- intersect(proteomics_upreg_names, kmo_upreg_symbols)
+common_kmo_downreg <- intersect(proteomics_downreg_names, kmo_downreg_symbols)
+
+# Case-insensitive check
+common_kmo_upreg_ci   <- intersect(toupper(proteomics_upreg_names),
+                                    toupper(kmo_upreg_symbols))
+common_kmo_downreg_ci <- intersect(toupper(proteomics_downreg_names),
+                                    toupper(kmo_downreg_symbols))
+
+additional_kmo_upreg   <- setdiff(common_kmo_upreg_ci,   toupper(common_kmo_upreg))
+additional_kmo_downreg <- setdiff(common_kmo_downreg_ci, toupper(common_kmo_downreg))
+
+if (length(additional_kmo_upreg) > 0) {
+    extra <- proteomics_upreg_names[
+        toupper(proteomics_upreg_names) %in% additional_kmo_upreg]
+    common_kmo_upreg <- unique(c(common_kmo_upreg, extra))
+}
+if (length(additional_kmo_downreg) > 0) {
+    extra <- proteomics_downreg_names[
+        toupper(proteomics_downreg_names) %in% additional_kmo_downreg]
+    common_kmo_downreg <- unique(c(common_kmo_downreg, extra))
+}
+
+cat("\n--- KMO KD vs cn proteomics (1-day-old only) overlap ---\n")
+cat("Upreg   matches:", length(common_kmo_upreg),   "\n")
+cat("Downreg matches:", length(common_kmo_downreg), "\n")
+cat("Upreg   genes:", paste(common_kmo_upreg,   collapse=", "), "\n")
+cat("Downreg genes:", paste(common_kmo_downreg, collapse=", "), "\n")
+ 
+# --- Step 6: Export to Excel ---
+pad_to_length <- function(x, n) { length(x) <- n; return(x) }
+ 
+n_upreg   <- max(nrow(proteomics_upreg),   length(common_kmo_upreg))
+n_downreg <- max(nrow(proteomics_downreg), length(common_kmo_downreg))
+ 
+write_xlsx(list(
+    Upreg_common   = data.frame(
+        In_common_KMO_RNAseq_upreg = pad_to_length(common_kmo_upreg, n_upreg)),
+    Downreg_common = data.frame(
+        In_common_KMO_RNAseq_downreg = pad_to_length(common_kmo_downreg, n_downreg))
+), "common_genes_KMO_only.xlsx")
+ 
+cat("Done. Results written to common_genes_KMO_only.xlsx\n")
+ 
+# Output:
+# common_genes_KMO_only.xlsx — two sheets:
+#   Upreg_common:   Obp99b
+#   Downreg_common: None

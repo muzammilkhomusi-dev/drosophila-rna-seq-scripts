@@ -1,0 +1,84 @@
+module load R/4.3.1
+ 
+# --- 13a. DEG Extraction ---
+ 
+Rscript -e '
+kmo <- read.csv("/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/DESeq2_KMO_vs_Control.csv", row.names=1)
+kmo_up   <- kmo[!is.na(kmo$padj) & kmo$padj < 0.05 & kmo$log2FoldChange >  1, ]
+kmo_down <- kmo[!is.na(kmo$padj) & kmo$padj < 0.05 & kmo$log2FoldChange < -1, ]
+kmo_up   <- kmo_up[order(kmo_up$padj), ]
+kmo_down <- kmo_down[order(kmo_down$padj), ]
+write.csv(kmo_up,   "/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/KMO_upregulated.csv")
+write.csv(kmo_down, "/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/KMO_downregulated.csv")
+cat("KMO upregulated:", nrow(kmo_up), "genes\n")
+cat("KMO downregulated:", nrow(kmo_down), "genes\n")
+ 
+tdo <- read.csv("/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/DESeq2_TDO_vs_Control.csv", row.names=1)
+tdo_up   <- tdo[!is.na(tdo$padj) & tdo$padj < 0.05 & tdo$log2FoldChange >  1, ]
+tdo_down <- tdo[!is.na(tdo$padj) & tdo$padj < 0.05 & tdo$log2FoldChange < -1, ]
+tdo_up   <- tdo_up[order(tdo_up$padj), ]
+tdo_down <- tdo_down[order(tdo_down$padj), ]
+write.csv(tdo_up,   "/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/TDO_upregulated.csv")
+write.csv(tdo_down, "/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/TDO_downregulated.csv")
+cat("TDO upregulated:", nrow(tdo_up), "genes\n")
+cat("TDO downregulated:", nrow(tdo_down), "genes\n")
+'
+ 
+# Output:
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/KMO_upregulated.csv   — 33 genes
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/KMO_downregulated.csv — 61 genes
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/TDO_upregulated.csv   — 136 genes
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/TDO_downregulated.csv — 201 genes
+ 
+# --- 13b. CG ID Annotation ---
+ 
+Rscript -e '
+.libPaths(c("/scratch/alice/[alphabetized usernames]/[username]/0_Extras/1_Apps/R_libs", .libPaths()))
+library(org.Dm.eg.db)
+ 
+annotate_degs <- function(input_path, output_path) {
+    df <- read.csv(input_path, row.names=1)
+    gene_ids <- gsub("^Dmel_", "", rownames(df))
+ 
+    symbols <- mapIds(org.Dm.eg.db,
+        keys=gene_ids, column="SYMBOL",
+        keytype="ALIAS", multiVals="first")
+ 
+    genenames <- mapIds(org.Dm.eg.db,
+        keys=gene_ids, column="GENENAME",
+        keytype="ALIAS", multiVals="first")
+ 
+    df$gene_id   <- gene_ids
+    df$symbol    <- symbols
+    df$gene_name <- genenames
+ 
+    df <- df[, c("gene_id","symbol","gene_name",
+                 "baseMean","log2FoldChange","lfcSE","stat","pvalue","padj")]
+ 
+    write.csv(df, output_path)
+    cat("Annotated:", output_path, "\n")
+    cat("  Genes with symbol:", sum(!is.na(df$symbol)), "of", nrow(df), "\n")
+}
+ 
+OUT <- "/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/"
+ 
+# Annotate significant DEG lists
+annotate_degs(paste0(OUT,"KMO_upregulated.csv"),   paste0(OUT,"KMO_upregulated_annot.csv"))
+annotate_degs(paste0(OUT,"KMO_downregulated.csv"), paste0(OUT,"KMO_downregulated_annot.csv"))
+annotate_degs(paste0(OUT,"TDO_upregulated.csv"),   paste0(OUT,"TDO_upregulated_annot.csv"))
+annotate_degs(paste0(OUT,"TDO_downregulated.csv"), paste0(OUT,"TDO_downregulated_annot.csv"))
+ 
+# Annotate full master DESeq2 results
+annotate_degs(paste0(OUT,"DESeq2_KMO_vs_Control.csv"), paste0(OUT,"DESeq2_KMO_vs_Control_annot.csv"))
+annotate_degs(paste0(OUT,"DESeq2_TDO_vs_Control.csv"), paste0(OUT,"DESeq2_TDO_vs_Control_annot.csv"))
+ 
+cat("\nAll annotation complete.\n")
+'
+ 
+# Output:
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/KMO_upregulated_annot.csv          — 33 genes annotated
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/KMO_downregulated_annot.csv        — 61 genes annotated
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/TDO_upregulated_annot.csv          — 136 genes annotated
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/TDO_downregulated_annot.csv        — 201 genes annotated
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/DESeq2_KMO_vs_Control_annot.csv    — full KMO results annotated
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/DESeq2_TDO_vs_Control_annot.csv    — full TDO results annotated

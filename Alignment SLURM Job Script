@@ -1,4 +1,4 @@
-cat > /scratch/alice/m/mk767/4_SAM_Data/hisat2_alignment.sh << 'EOF'
+cat > /scratch/alice/[alphabetized usernames]/[username]/4_SAM_Data/hisat2_alignment.sh << 'EOF'
 #!/bin/bash
 #SBATCH --job-name=hisat2_alignment
 #SBATCH --output=/scratch/alice/[alphabetized usernames]/[username]/4_SAM_Data/hisat2_alignment_%j.log

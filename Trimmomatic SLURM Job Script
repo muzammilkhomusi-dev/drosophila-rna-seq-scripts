@@ -36,4 +36,4 @@ done < $SAMPLES
 EOF
 
 # Submit the job
-sbatch /scratch/alice/m/mk767/3_Trimmed_Data/trimmomatic.sh
+sbatch /scratch/alice/[alphabetized usernames]/[username]/3_Trimmed_Data/trimmomatic.sh

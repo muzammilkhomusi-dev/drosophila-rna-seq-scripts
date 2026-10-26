@@ -1,0 +1,87 @@
+module load R/4.3.1
+
+# Save the following as DESeq2_analysis.R and run with: Rscript DESeq2_analysis.R
+
+cat > /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/DESeq2_analysis.R << 'EOF'
+library(DESeq2)
+
+# ------------------------------------------------------------
+# 1. Load and clean the counts matrix
+# ------------------------------------------------------------
+# Read the counts matrix, skipping the first comment line
+counts_raw <- read.table(
+    "/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/fly_counts_matrix.txt",
+    header = TRUE,
+    skip = 1,
+    row.names = 1
+)
+
+# Remove annotation columns (Chr, Start, End, Strand, Length)
+counts <- counts_raw[, 6:ncol(counts_raw)]
+
+# Simplify column names from full BAM paths to sample names
+colnames(counts) <- c("s10","s12","s13","s15","s17","s18",
+                      "s1","s2","s3","s5","s6","s7","s8")
+
+# ------------------------------------------------------------
+# 2. Comparison 1: Control (3Mkk) vs KMO KD (cnkk)
+# ------------------------------------------------------------
+counts_KMO <- counts[, c("s1","s2","s3","s5","s6")]
+
+coldata_KMO <- data.frame(
+    condition = factor(c("Control","Control","Control","KMO_KD","KMO_KD")),
+    row.names = colnames(counts_KMO)
+)
+
+dds_KMO <- DESeqDataSetFromMatrix(
+    countData = counts_KMO,
+    colData   = coldata_KMO,
+    design    = ~ condition
+)
+dds_KMO <- DESeq(dds_KMO)
+
+res_KMO <- results(dds_KMO, contrast = c("condition","KMO_KD","Control"))
+res_KMO <- res_KMO[order(res_KMO$padj), ]
+
+write.csv(as.data.frame(res_KMO),
+    file = "/scratch/alice/m/mk767/6_Counts_Data/DESeq2_KMO_vs_Control.csv")
+
+# ------------------------------------------------------------
+# 3. Comparison 2: Control (3Mkk) vs TDO KD (vkk)
+# ------------------------------------------------------------
+counts_TDO <- counts[, c("s1","s2","s3","s7","s8")]
+
+coldata_TDO <- data.frame(
+    condition = factor(c("Control","Control","Control","TDO_KD","TDO_KD")),
+    row.names = colnames(counts_TDO)
+)
+
+dds_TDO <- DESeqDataSetFromMatrix(
+    countData = counts_TDO,
+    colData   = coldata_TDO,
+    design    = ~ condition
+)
+dds_TDO <- DESeq(dds_TDO)
+
+res_TDO <- results(dds_TDO, contrast = c("condition","TDO_KD","Control"))
+res_TDO <- res_TDO[order(res_TDO$padj), ]
+
+write.csv(as.data.frame(res_TDO),
+    file = "/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/DESeq2_TDO_vs_Control.csv")
+
+cat("DESeq2 analysis complete.\n")
+EOF
+
+Rscript /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/DESeq2_analysis.R
+
+# Output:
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/DESeq2_KMO_vs_Control.csv — KMO KD vs Control results
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/DESeq2_TDO_vs_Control.csv — TDO KD vs Control results
+#
+# Columns in output CSVs:
+# baseMean       — mean normalised count across all samples
+# log2FoldChange — log2 fold change (positive = up in KD, negative = down in KD)
+# lfcSE          — standard error of the log2 fold change
+# stat           — Wald test statistic
+# pvalue         — raw p-value
+# padj           — Benjamini-Hochberg adjusted p-value (use this for significance)

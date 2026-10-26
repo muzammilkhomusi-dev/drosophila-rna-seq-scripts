@@ -1,0 +1,186 @@
+# Script #1 for volcano plot
+module load R/4.3.1
+
+# Save the following as volcano_plots.R and run with: Rscript volcano_plots.R
+
+cat > /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/volcano_plots.R << 'EOF'
+if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    install.packages("ggplot2", repos = "https://cloud.r-project.org")
+}
+if (!requireNamespace("ggrepel", quietly = TRUE)) {
+    install.packages("ggrepel", repos = "https://cloud.r-project.org")
+}
+
+library(ggplot2)
+library(ggrepel)
+
+PADJ_THRESHOLD  <- 0.05
+LFC_THRESHOLD   <- 1
+TOP_N_LABELS    <- 15
+
+prepare_volcano_data <- function(csv_path) {
+    df <- read.csv(csv_path, row.names = 1)
+    df$padj[is.na(df$padj)] <- 1
+    df$neg_log10_padj <- -log10(df$padj)
+    df$neg_log10_padj[df$neg_log10_padj > 350] <- 350
+    df$significance <- "Not significant"
+    df$significance[df$padj < PADJ_THRESHOLD & df$log2FoldChange >  LFC_THRESHOLD] <- "Upregulated"
+    df$significance[df$padj < PADJ_THRESHOLD & df$log2FoldChange < -LFC_THRESHOLD] <- "Downregulated"
+    df$significance <- factor(df$significance,
+        levels = c("Upregulated", "Downregulated", "Not significant"))
+    top_up   <- head(df[df$significance == "Upregulated",   ][order(df[df$significance == "Upregulated",   ]$padj), ], TOP_N_LABELS)
+    top_down <- head(df[df$significance == "Downregulated", ][order(df[df$significance == "Downregulated", ]$padj), ], TOP_N_LABELS)
+    df$label <- ifelse(rownames(df) %in% c(rownames(top_up), rownames(top_down)), rownames(df), "")
+    return(df)
+}
+
+make_volcano_plot <- function(df, title, output_path) {
+    n_up   <- sum(df$significance == "Upregulated")
+    n_down <- sum(df$significance == "Downregulated")
+    subtitle <- paste0("Upregulated: ", n_up, "  |  Downregulated: ", n_down,
+                       "  (padj < ", PADJ_THRESHOLD, ", |log2FC| > ", LFC_THRESHOLD, ")")
+    p <- ggplot(df, aes(x = log2FoldChange, y = neg_log10_padj,
+                        colour = significance, label = label)) +
+        geom_point(alpha = 0.6, size = 1.2) +
+        scale_colour_manual(values = c(
+            "Upregulated"     = "#D73027",
+            "Downregulated"   = "#4575B4",
+            "Not significant" = "#AAAAAA"
+        )) +
+        geom_hline(yintercept = -log10(PADJ_THRESHOLD),
+                   linetype = "dashed", colour = "black", linewidth = 0.5) +
+        geom_vline(xintercept = c(-LFC_THRESHOLD, LFC_THRESHOLD),
+                   linetype = "dashed", colour = "black", linewidth = 0.5) +
+        geom_text_repel(size = 2.8, max.overlaps = 20, box.padding = 0.4,
+                        colour = "black", fontface = "italic") +
+        labs(title = title, subtitle = subtitle,
+             x = expression(log[2]~"Fold Change"),
+             y = expression(-log[10]~"(adjusted p-value)"),
+             colour = "Expression") +
+        theme_bw(base_size = 13) +
+        theme(plot.title = element_text(face = "bold", size = 14),
+              plot.subtitle = element_text(size = 10, colour = "grey40"),
+              legend.position = "right",
+              panel.grid.minor = element_blank())
+    ggsave(paste0(output_path, ".png"), plot = p, width = 10, height = 7, dpi = 300)
+    ggsave(paste0(output_path, ".pdf"), plot = p, width = 10, height = 7)
+    cat("Saved:", paste0(output_path, ".png"), "\n")
+    cat("Saved:", paste0(output_path, ".pdf"), "\n")
+    return(p)
+}
+
+cat("Processing KMO KD vs Control...\n")
+df_KMO <- prepare_volcano_data("/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/DESeq2_KMO_vs_Control.csv")
+make_volcano_plot(df_KMO, "KMO Knockdown vs Control (3Mkk)",
+    "/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/volcano_KMO_vs_Control")
+
+cat("Processing TDO KD vs Control...\n")
+df_TDO <- prepare_volcano_data("/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/DESeq2_TDO_vs_Control.csv")
+make_volcano_plot(df_TDO, "TDO Knockdown vs Control (3Mkk)",
+    "/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/volcano_TDO_vs_Control")
+
+cat("\nAll volcano plots complete.\n")
+EOF
+
+Rscript /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/volcano_plots.R
+
+# Output:
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/volcano_KMO_vs_Control.png  — KMO volcano plot (PNG)
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/volcano_KMO_vs_Control.pdf  — KMO volcano plot (PDF)
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/volcano_TDO_vs_Control.png  — TDO volcano plot (PNG)
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/volcano_TDO_vs_Control.pdf  — TDO volcano plot (PDF)
+
+
+# Script #2 for PCA plot and sample-to-sample heatmap
+
+module load R/4.3.1
+ 
+# Save the following as PCA_heatmap.R and run with: Rscript PCA_heatmap.R
+ 
+cat > /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/PCA_heatmap.R << 'EOF'
+.libPaths(c("/scratch/alice/[alphabetized usernames]/[username]/0_Extras/1_Apps/R_libs", .libPaths()))
+ 
+library(DESeq2)
+library(ggplot2)
+library(ggrepel)
+library(pheatmap)
+library(RColorBrewer)
+ 
+# Load and clean counts matrix
+counts_raw <- read.table(
+    "/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/fly_counts_matrix.txt",
+    header = TRUE, skip = 1, row.names = 1
+)
+counts <- counts_raw[, 6:ncol(counts_raw)]
+colnames(counts) <- c("s10","s12","s13","s15","s17","s18",
+                      "s1","s2","s3","s5","s6","s7","s8")
+counts_sub <- counts[, c("s1","s2","s3","s5","s6","s7","s8")]
+ 
+coldata <- data.frame(
+    condition = factor(c("Control","Control","Control",
+                         "KMO_KD","KMO_KD","TDO_KD","TDO_KD")),
+    row.names = colnames(counts_sub)
+)
+ 
+dds <- DESeqDataSetFromMatrix(countData=counts_sub, colData=coldata, design=~condition)
+dds <- DESeq(dds)
+vst <- vst(dds, blind=TRUE)
+ 
+# PCA Plot
+pca_data <- plotPCA(vst, intgroup="condition", returnData=TRUE)
+percent_var <- round(100 * attr(pca_data, "percentVar"))
+pca_data$sample <- rownames(pca_data)
+ 
+p_pca <- ggplot(pca_data, aes(x=PC1, y=PC2, colour=condition, label=sample)) +
+    geom_point(size=4, alpha=0.9) +
+    geom_text_repel(size=3.5, box.padding=0.5, colour="black") +
+    scale_colour_manual(values=c("Control"="#2CA02C","KMO_KD"="#D73027","TDO_KD"="#4575B4")) +
+    labs(title="PCA of RNA-seq Samples",
+         subtitle="Variance stabilised counts (VST); blind = TRUE",
+         x=paste0("PC1 (", percent_var[1], "% variance)"),
+         y=paste0("PC2 (", percent_var[2], "% variance)"),
+         colour="Condition") +
+    theme_bw(base_size=13) +
+    theme(plot.title=element_text(face="bold", size=14),
+          plot.subtitle=element_text(size=10, colour="grey40"),
+          legend.position="right", panel.grid.minor=element_blank())
+ 
+ggsave("/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/PCA_plot.png", plot=p_pca, width=8, height=6, dpi=300)
+ggsave("/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/PCA_plot.pdf", plot=p_pca, width=8, height=6)
+cat("Saved: PCA_plot.png and PCA_plot.pdf\n")
+ 
+# Sample-to-Sample Distance Heatmap
+sample_dists <- dist(t(assay(vst)))
+sample_dist_matrix <- as.matrix(sample_dists)
+ 
+annotation <- data.frame(Condition=coldata$condition, row.names=rownames(coldata))
+annotation_colours <- list(Condition=c("Control"="#2CA02C","KMO_KD"="#D73027","TDO_KD"="#4575B4"))
+colours <- colorRampPalette(rev(brewer.pal(9, "Blues")))(255)
+ 
+png("/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/sample_distance_heatmap.png", width=2400, height=2000, res=300)
+pheatmap(sample_dist_matrix,
+    clustering_distance_rows=sample_dists, clustering_distance_cols=sample_dists,
+    annotation_col=annotation, annotation_row=annotation,
+    annotation_colors=annotation_colours, col=colours,
+    main="Sample-to-Sample Distance Heatmap", fontsize=11)
+dev.off()
+ 
+pdf("/scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/sample_distance_heatmap.pdf", width=8, height=7)
+pheatmap(sample_dist_matrix,
+    clustering_distance_rows=sample_dists, clustering_distance_cols=sample_dists,
+    annotation_col=annotation, annotation_row=annotation,
+    annotation_colors=annotation_colours, col=colours,
+    main="Sample-to-Sample Distance Heatmap", fontsize=11)
+dev.off()
+ 
+cat("Saved: sample_distance_heatmap.png and sample_distance_heatmap.pdf\n")
+cat("\nAll plots complete.\n")
+EOF
+ 
+Rscript /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/PCA_heatmap.R
+ 
+# Output:
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/PCA_plot.png                 — PCA plot (PNG)
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/PCA_plot.pdf                 — PCA plot (PDF)
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/sample_distance_heatmap.png  — heatmap (PNG)
+# /scratch/alice/[alphabetized usernames]/[username]/6_Counts_Data/sample_distance_heatmap.pdf  — heatmap (PDF)

@@ -1,0 +1,136 @@
+# ============================================================
+# Hypergeometric tests: KMO KD vs TDO KD gene list overlap
+# ============================================================
+
+# ----------------------------
+# Define gene universe
+# ----------------------------
+
+# Total genes tested in RNA-seq
+# Total lines in fly_count_matrix.txt file = 17564 minus 3 non-gene lines for column headers etc = 17561
+total_genes <- 17561
+
+
+# ----------------------------
+# Define KMO KD DEG set
+# ----------------------------
+
+# KMO KD significant DEGs (padj < 0.05, |log2FC| > 1)
+kmo_total <- 94     # 33 up + 61 down
+
+# KMO KD significantly upregulated DEGs
+kmo_up <- 33
+
+# KMO KD significantly downregulated DEGs
+kmo_down <- 61
+
+
+# ----------------------------
+# Define TDO KD DEG set
+# ----------------------------
+
+# TDO KD significant DEGs (padj < 0.05, |log2FC| > 1)
+tdo_total <- 337    # 136 up + 201 down
+
+# TDO KD significantly upregulated DEGs
+tdo_up <- 136
+
+# TDO KD significantly downregulated DEGs
+tdo_down <- 201
+
+
+# ============================================================
+# 1. KMO KD significantly UPREGULATED genes
+# ============================================================
+
+# Observed overlap between KMO and TDO KD upregulated genes
+observed_up <- 8
+
+# Hypergeometric test
+p_value_up <- phyper(
+  q = observed_up - 1,
+  m = tdo_up,
+  n = total_genes - tdo_up,
+  k = kmo_up,
+  lower.tail = FALSE
+)
+
+# Hypergeometric mean (expected overlap by chance)
+expected_up <- (kmo_up * tdo_up) / total_genes
+
+
+# ============================================================
+# 2. KMO KD significantly DOWNREGULATED genes
+# ============================================================
+
+# Observed overlap between KMO and TDO KD downregulated genes
+observed_down <- 20
+
+# Hypergeometric test
+p_value_down <- phyper(
+  q = observed_down - 1,
+  m = tdo_down,
+  n = total_genes - tdo_down,
+  k = kmo_down,
+  lower.tail = FALSE
+)
+
+# Hypergeometric mean (expected overlap by chance)
+expected_down <- (kmo_down * tdo_down) / total_genes
+
+
+# ============================================================
+# Print results
+# ============================================================
+
+cat("=== Hypergeometric Test: KMO KD vs TDO KD directional overlap ===\n\n")
+
+cat("Gene universe:", total_genes, "\n")
+cat("Total KMO KD DEGs:", kmo_total, "\n")
+cat("  Upregulated:", kmo_up, "\n")
+cat("  Downregulated:", kmo_down, "\n")
+cat("Total TDO KD DEGs:", tdo_total, "\n")
+cat("  Upregulated:", tdo_up, "\n")
+cat("  Downregulated:", tdo_down, "\n\n")
+
+
+# ----------------------------
+# UPREGULATED GENE OVERLAP
+# ----------------------------
+
+cat("--- UPREGULATED gene overlap ---\n")
+cat("KMO KD upregulated DEGs:", kmo_up, "\n")
+cat("TDO KD upregulated DEGs:", tdo_up, "\n")
+cat("Observed KMO-up/TDO-up overlap:", observed_up, "\n")
+cat("Expected overlap (hypergeometric mean):",
+    round(expected_up, 2), "\n")
+cat("p-value:", format.pval(p_value_up, digits = 4), "\n")
+
+if (p_value_up < 0.05) {
+  cat("Result: The KMO-up/TDO-up overlap is SIGNIFICANT (p < 0.05) -",
+      "more overlap than expected by chance.\n\n")
+} else {
+  cat("Result: The KMO-up/TDO-up overlap is NOT significant (p >= 0.05) -",
+      "consistent with chance.\n\n")
+}
+
+
+# ----------------------------
+# DOWNREGULATED GENE OVERLAP
+# ----------------------------
+
+cat("--- DOWNREGULATED gene overlap ---\n")
+cat("KMO KD downregulated DEGs:", kmo_down, "\n")
+cat("TDO KD downregulated DEGs:", tdo_down, "\n")
+cat("Observed KMO-down/TDO-down overlap:", observed_down, "\n")
+cat("Expected overlap (hypergeometric mean):",
+    round(expected_down, 2), "\n")
+cat("p-value:", format.pval(p_value_down, digits = 4), "\n")
+
+if (p_value_down < 0.05) {
+  cat("Result: The KMO-down/TDO-down overlap is SIGNIFICANT (p < 0.05) -",
+      "more overlap than expected by chance.\n")
+} else {
+  cat("Result: The KMO-down/TDO-down overlap is NOT significant (p >= 0.05) -",
+      "consistent with chance.\n")
+}
